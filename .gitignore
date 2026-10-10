@@ -1,0 +1,37 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.cxx
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.kotlin
+# Internal working notes (Italian), kept locally only
+/PROGETTO-MYMELONDS.md
+
+# Build outputs and debugging leftovers that must never be published
+*.apk
+*.aab
+*.so.debug
+symbols*/
+mapping*.txt
+*.log
+*.tmp
+*.ppm
+tools/lua/host-test/lua_host_test
+tools/lua/host-test/overlay.*
+tools/controls/*.png
+anteprima*.png
+
+# Signing keys and secrets
+*.jks
+*.keystore
+keystore.properties
+*.env
+
+# Editor and OS files
+.vscode/
+Thumbs.db
+desktop.ini

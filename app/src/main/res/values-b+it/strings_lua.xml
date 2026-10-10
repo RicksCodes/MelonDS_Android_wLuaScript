@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lua_scripts">Script Lua</string>
+    <string name="lua_load_script">Carica script…</string>
+    <string name="lua_reload_script">Ricarica %1$s</string>
+    <string name="lua_stop_script">Ferma script</string>
+    <string name="lua_show_keys">Mostra tasti script</string>
+    <string name="lua_hide_keys">Nascondi tasti script</string>
+    <string name="lua_keys_move_bottom">Sposta i tasti script in basso</string>
+    <string name="lua_keys_move_top">Sposta i tasti script in alto</string>
+    <string name="lua_console">Console</string>
+    <string name="lua_console_empty">(nessun output)</string>
+    <string name="lua_clear">Svuota</string>
+    <string name="lua_close">Chiudi</string>
+    <string name="lua_read_failed">Impossibile leggere il file dello script</string>
+    <string name="fast_forward_frame_skip">Frameskip durante l\'avanzamento rapido</string>
+    <string name="fast_forward_frame_skip_summary">Disegna solo i fotogrammi necessari per circa 60 FPS mentre acceleri. Molto più veloce, ma alcuni effetti grafici possono avere glitch durante l\'accelerazione</string>
+    <string name="lua_appearance">Aspetto…</string>
+    <string name="lua_appearance_keys">Tasti dello script</string>
+    <string name="lua_appearance_size">Dimensione</string>
+    <string name="lua_appearance_opacity">Opacità</string>
+    <string name="lua_appearance_color">Colore</string>
+    <string name="lua_appearance_layout">Disposizione</string>
+    <string name="lua_appearance_layout_row">Riga</string>
+    <string name="lua_appearance_layout_column">Colonna</string>
+    <string name="lua_appearance_layout_grid">Griglia 2×5</string>
+    <string name="lua_appearance_position">Posizione</string>
+    <string name="lua_appearance_position_hint">Tocca il pulsante 1–0 per aprire o chiudere i tasti, trascinalo per spostarli</string>
+    <string name="lua_appearance_top">In alto</string>
+    <string name="lua_appearance_bottom">In basso</string>
+    <string name="lua_appearance_left">A sinistra</string>
+    <string name="lua_appearance_right">A destra</string>
+    <string name="lua_appearance_vibration">Vibrazione alla pressione</string>
+    <string name="lua_appearance_overlay">Scritte dello script</string>
+    <string name="lua_appearance_overlay_opacity">Opacità di testo e riquadri</string>
+    <string name="lua_appearance_reset">Ripristina</string>
+    <string name="log">Log</string>
+    <string name="log_summary">Rapporto dell\'ultima sessione, da copiare se qualcosa va storto</string>
+    <string name="log_view">Mostra ultimo log</string>
+    <string name="log_copy">Copia ultimo log</string>
+    <string name="log_copy_summary">Lo copia negli appunti, pronto da incollare</string>
+    <string name="log_share">Condividi ultimo log</string>
+    <string name="log_delete">Cancella log</string>
+    <string name="log_none">Nessun log per ora. Viene creato quando chiudi un gioco (o se va in crash).</string>
+    <string name="log_copied">Log copiato</string>
+    <string name="log_deleted">Log cancellato</string>
+</resources>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lua_scripts">Lua scripts</string>
+    <string name="lua_load_script">Load script…</string>
+    <string name="lua_reload_script">Reload %1$s</string>
+    <string name="lua_stop_script">Stop script</string>
+    <string name="lua_show_keys">Show script keys</string>
+    <string name="lua_hide_keys">Hide script keys</string>
+    <string name="lua_keys_move_bottom">Move script keys to the bottom</string>
+    <string name="lua_keys_move_top">Move script keys to the top</string>
+    <string name="lua_console">Console</string>
+    <string name="lua_console_empty">(no output yet)</string>
+    <string name="lua_clear">Clear</string>
+    <string name="lua_close">Close</string>
+    <string name="lua_read_failed">Could not read the script file</string>
+    <string name="fast_forward_frame_skip">Frameskip while fast-forwarding</string>
+    <string name="fast_forward_frame_skip_summary">Only draw the frames needed for about 60 FPS while fast-forwarding. Much faster, but some graphical effects may glitch while accelerating</string>
+    <string name="lua_appearance">Appearance…</string>
+    <string name="lua_appearance_keys">Script keys</string>
+    <string name="lua_appearance_size">Size</string>
+    <string name="lua_appearance_opacity">Opacity</string>
+    <string name="lua_appearance_color">Colour</string>
+    <string name="lua_appearance_layout">Layout</string>
+    <string name="lua_appearance_layout_row">Row</string>
+    <string name="lua_appearance_layout_column">Column</string>
+    <string name="lua_appearance_layout_grid">Grid 2×5</string>
+    <string name="lua_appearance_position">Position</string>
+    <string name="lua_appearance_position_hint">Tap the 1–0 button to open or close the keypad, drag it to move it</string>
+    <string name="lua_appearance_top">Top</string>
+    <string name="lua_appearance_bottom">Bottom</string>
+    <string name="lua_appearance_left">Left</string>
+    <string name="lua_appearance_right">Right</string>
+    <string name="lua_appearance_vibration">Vibrate on press</string>
+    <string name="lua_appearance_overlay">Script drawings</string>
+    <string name="lua_appearance_overlay_opacity">Opacity of text and boxes</string>
+    <string name="lua_appearance_reset">Reset</string>
+    <string name="log">Log</string>
+    <string name="log_summary">Last session report, to copy when something goes wrong</string>
+    <string name="log_view">Show last log</string>
+    <string name="log_copy">Copy last log</string>
+    <string name="log_copy_summary">Copies it to the clipboard, ready to paste</string>
+    <string name="log_share">Share last log</string>
+    <string name="log_delete">Delete log</string>
+    <string name="log_none">No log yet. It is created when you close a game (or if it crashes).</string>
+    <string name="log_copied">Log copied</string>
+    <string name="log_deleted">Log deleted</string>
+</resources>
