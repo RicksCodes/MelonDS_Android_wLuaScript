@@ -541,14 +541,89 @@ int joypadGet(lua_State* L)
     return 1;
 }
 
+// DeSmuME names, compared case-insensitively. Index = melonDS key bit.
+const char* const kJoypadKeyNames[12] = { "a", "b", "select", "start", "right", "left", "up", "down", "r", "l", "x", "y" };
+
+int joypadKeyBit(const char* name)
+{
+    std::string lower(name);
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return (char) std::tolower(c); });
+    for (int i = 0; i < 12; ++i)
+    {
+        if (lower == kJoypadKeyNames[i])
+            return i;
+    }
+    return -1;
+}
+
+// joypad.set([port,] table): true = press, false = force release, nil/absent = leave it to the user.
+// Applies to the next frame only (call it every frame to hold a button), like in DeSmuME.
 int joypadSet(lua_State* L)
 {
-    static bool warned = false;
-    if (!warned)
+    int tableIndex = lua_istable(L, 1) ? 1 : 2;
+    luaL_checktype(L, tableIndex, LUA_TTABLE);
+
+    uint32_t press = 0;
+    uint32_t release = 0;
+    lua_pushnil(L);
+    while (lua_next(L, tableIndex) != 0)
     {
-        warned = true;
-        getEngine(L)->appendOutput("[Avviso] joypad.set non è supportato, chiamata ignorata.\n");
+        // Key at -2, value at -1. Don't call lua_tostring on the key: it would confuse lua_next.
+        if (lua_type(L, -2) == LUA_TSTRING)
+        {
+            int keyBit = joypadKeyBit(lua_tostring(L, -2));
+            if (keyBit >= 0)
+            {
+                if (lua_toboolean(L, -1))
+                    press |= 1u << keyBit;
+                else
+                    release |= 1u << keyBit;
+            }
+        }
+        lua_pop(L, 1);
     }
+
+    getEngine(L)->setJoypadOverride(press, release);
+    return 0;
+}
+
+// --- stylus (DeSmuME: stylus.get/peek/read and stylus.set/write with {x, y, touch}) ---
+
+int stylusGet(lua_State* L)
+{
+    bool isTouching;
+    int x, y;
+    getEngine(L)->getUserTouch(isTouching, x, y);
+
+    lua_createtable(L, 0, 3);
+    lua_pushinteger(L, x);
+    lua_setfield(L, -2, "x");
+    lua_pushinteger(L, y);
+    lua_setfield(L, -2, "y");
+    lua_pushboolean(L, isTouching);
+    lua_setfield(L, -2, "touch");
+    return 1;
+}
+
+int stylusSet(lua_State* L)
+{
+    int tableIndex = lua_istable(L, 1) ? 1 : 2;
+    luaL_checktype(L, tableIndex, LUA_TTABLE);
+
+    lua_getfield(L, tableIndex, "x");
+    bool hasPosition = !lua_isnil(L, -1);
+    int x = hasPosition ? (int) lua_tonumber(L, -1) : 0;
+    lua_pop(L, 1);
+    lua_getfield(L, tableIndex, "y");
+    int y = lua_isnil(L, -1) ? 0 : (int) lua_tonumber(L, -1);
+    lua_pop(L, 1);
+
+    // Without an explicit "touch" field, giving a position means touching
+    lua_getfield(L, tableIndex, "touch");
+    bool down = lua_isnil(L, -1) ? hasPosition : (bool) lua_toboolean(L, -1);
+    lua_pop(L, 1);
+
+    getEngine(L)->setStylusOverride(down, std::clamp(x, 0, 255), std::clamp(y, 0, 191));
     return 0;
 }
 
@@ -796,6 +871,11 @@ const luaL_Reg kJoypadFunctions[] = {
     { nullptr, nullptr }
 };
 
+const luaL_Reg kStylusFunctions[] = {
+    { "get", stylusGet }, { "peek", stylusGet }, { "read", stylusGet }, { "set", stylusSet }, { "write", stylusSet },
+    { nullptr, nullptr }
+};
+
 const luaL_Reg kEmuFunctions[] = {
     { "frameadvance", emuFrameAdvance }, { "framecount", emuFrameCount }, { "lagcount", emuLagCount },
     { "emulating", emuEmulating }, { "reset", emuReset },
@@ -872,6 +952,36 @@ void LuaEngine::setTouchState(bool isTouching, int x, int y)
         touchX = x;
         touchY = y;
     }
+}
+
+void LuaEngine::setJoypadOverride(uint32_t pressMask, uint32_t releaseMask)
+{
+    // Each call replaces the previous one, like in DeSmuME
+    pendingInput.pressMask = pressMask & 0xFFF;
+    pendingInput.releaseMask = releaseMask & 0xFFF & ~pressMask;
+}
+
+void LuaEngine::setStylusOverride(bool down, int x, int y)
+{
+    pendingInput.touchSet = true;
+    pendingInput.touchDown = down;
+    pendingInput.touchX = x;
+    pendingInput.touchY = y;
+}
+
+void LuaEngine::getUserTouch(bool& isTouching, int& x, int& y)
+{
+    std::lock_guard lock(inputMutex);
+    isTouching = touching;
+    x = touchX;
+    y = touchY;
+}
+
+LuaEngine::InputOverride LuaEngine::takeInputOverride()
+{
+    InputOverride result = pendingInput;
+    pendingInput = InputOverride();
+    return result;
 }
 
 void LuaEngine::pushInputTable(lua_State* state)
@@ -998,6 +1108,7 @@ void LuaEngine::load(LoadRequest request)
     registerFunctions(L, "gui", kGuiFunctions);
     registerFunctions(L, "input", kInputFunctions);
     registerFunctions(L, "joypad", kJoypadFunctions);
+    registerFunctions(L, "stylus", kStylusFunctions);
     registerFunctions(L, "emu", kEmuFunctions);
     registerFunctions(L, "savestate", kSavestateFunctions);
     registerFunctions(L, "movie", kMovieFunctions);
@@ -1236,6 +1347,8 @@ void LuaEngine::close()
     std::fill(std::begin(callbackRefs), std::end(callbackRefs), LUA_NOREF);
     mainCoroutineFinished = true;
     stopFromScript = false;
+    // A stopped script must not keep holding buttons
+    pendingInput = InputOverride();
 }
 
 }

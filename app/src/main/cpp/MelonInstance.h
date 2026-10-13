@@ -95,6 +95,8 @@ private:
     void setDateTime();
     void saveRewindState(RewindSaveState* rewindSaveState);
     u8* getLuaMemoryPointer(u32 address);
+    void applyLuaInput();
+    u32 effectiveKeyMask() const { return (inputMask & ~luaPressMask.load()) | luaReleaseMask.load(); }
     bool shouldSkipFrame(int frameNumber);
     u32 runSkippedFrame();
 
@@ -123,6 +125,14 @@ private:
     std::unique_ptr<Lua::LuaEngine> luaEngine;
     Lua::LuaOverlayRenderer luaOverlayRenderer;
     std::atomic_bool luaResetRequested = false;
+
+    // Input from joypad.set / stylus.set, applied on top of the user's input for one frame
+    std::atomic<u32> luaPressMask = 0;
+    std::atomic<u32> luaReleaseMask = 0;
+    std::atomic_bool luaTouchActive = false;
+    std::atomic_bool userTouching = false;
+    std::atomic<u16> userTouchX = 0;
+    std::atomic<u16> userTouchY = 0;
 
     // Fast-forward frameskip. The decision for a frame is taken one frame in advance, because the 3D scene of a
     // frame starts rendering during the previous one.

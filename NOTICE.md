@@ -41,11 +41,15 @@ Third-party components that were already part of melonDS Android keep their own 
 
 ## Example scripts
 
-`tools/lua/Pt_Natura_Strumento_DeSmuME.lua` and `tools/lua/platinum-item-and-nature.lua` are derived from
+`tools/lua/Pt_Natura_Strumento_DeSmuME.lua`, `tools/lua/platinum-item-and-nature.lua` and `tools/lua/Pt_Autoplay.lua` are derived from
 **`Pt_RNG_DeSmuMe.lua`**, a Pokémon Platinum RNG script shared by the Pokémon RNG community. They reuse its pointer
 offsets, block-order table and decryption logic, and its English item list. The original authors could not be
 identified with certainty. All credit for that research goes to them, and these files will be changed or removed on
 request.
+
+`tools/lua/Pt_Autoplay.lua` also uses Platinum memory addresses (battle indicator, foe and party pointers, language
+offsets) and the "touch RUN" flee position documented by **pokebot-nds** (wyanido and contributors,
+https://github.com/wyanido/pokebot-nds). Only those facts were reused; the script's code was written from scratch.
 
 ## Trademarks and content
 

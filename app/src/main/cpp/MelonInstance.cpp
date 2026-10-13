@@ -306,6 +306,7 @@ u32 MelonInstance::runFrame()
     CRASH_BREADCRUMB("runFrame: preparazione frame");
     if (luaResetRequested.exchange(false))
         reset();
+    applyLuaInput();
 
     if (isRenderConfigurationDirty)
     {
@@ -526,14 +527,47 @@ float MelonInstance::getMotionData(MotionQueryType type)
 
 void MelonInstance::touchScreen(u16 x, u16 y)
 {
-    nds->TouchScreen(x, y);
+    userTouchX = x;
+    userTouchY = y;
+    userTouching = true;
+    // While a Lua script drives the stylus, the user's touch is applied again when the script lets go
+    if (!luaTouchActive)
+        nds->TouchScreen(x, y);
     luaEngine->setTouchState(true, x, y);
 }
 
 void MelonInstance::releaseScreen()
 {
-    nds->ReleaseScreen();
+    userTouching = false;
+    if (!luaTouchActive)
+        nds->ReleaseScreen();
     luaEngine->setTouchState(false, 0, 0);
+}
+
+void MelonInstance::applyLuaInput()
+{
+    // Emulator thread, right before the frame runs. With no script input this just re-applies the user's state.
+    Lua::LuaEngine::InputOverride input = luaEngine->takeInputOverride();
+    luaPressMask = input.pressMask & 0xFFF;
+    luaReleaseMask = input.releaseMask & 0xFFF;
+    nds->SetKeyMask(effectiveKeyMask());
+
+    if (input.touchSet)
+    {
+        if (input.touchDown)
+            nds->TouchScreen((u16) input.touchX, (u16) input.touchY);
+        else
+            nds->ReleaseScreen();
+        luaTouchActive = true;
+    }
+    else if (luaTouchActive)
+    {
+        luaTouchActive = false;
+        if (userTouching)
+            nds->TouchScreen(userTouchX, userTouchY);
+        else
+            nds->ReleaseScreen();
+    }
 }
 
 void MelonInstance::pressKey(u32 key)
@@ -546,7 +580,7 @@ void MelonInstance::pressKey(u32 key)
     else
     {
         inputMask &= ~(1 << key);
-        nds->SetKeyMask(inputMask);
+        nds->SetKeyMask(effectiveKeyMask());
     }
 }
 
@@ -560,7 +594,7 @@ void MelonInstance::releaseKey(u32 key)
     else
     {
         inputMask |= (1 << key);
-        nds->SetKeyMask(inputMask);
+        nds->SetKeyMask(effectiveKeyMask());
     }
 }
 

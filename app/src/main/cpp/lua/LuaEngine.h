@@ -17,7 +17,7 @@ namespace MelonDSAndroid::Lua
 
 /**
  * Runs a Lua 5.1 script with an API compatible with the most used parts of DeSmuME's Lua engine
- * (memory, bit, gui, input, joypad, emu). Scripts written for DeSmuME, like the Pokémon RNG overlays, run unchanged.
+ * (memory, bit, gui, input, joypad, stylus, emu). Scripts written for DeSmuME, like the Pokémon RNG overlays, run unchanged.
  *
  * Threading: requestLoad, requestStop, setKeyState, setTouchState, pollOutput, getStatus and getScriptName may be
  * called from any thread. Everything else must be called from the emulator thread, which is the only thread that ever
@@ -89,6 +89,32 @@ public:
     void pushInputTable(lua_State* L);
     void requestStopFromScript() { stopFromScript = true; }
 
+    /**
+     * Input requested by the script with joypad.set / stylus.set. Like in DeSmuME, it applies to one frame only: the
+     * frame that starts right after the call (or the current one, when called from emu.registerbefore). Scripts that
+     * want to hold a button call joypad.set every frame.
+     */
+    struct InputOverride
+    {
+        // melonDS key order (0 A, 1 B, 2 Select, 3 Start, 4 Right, 5 Left, 6 Up, 7 Down, 8 R, 9 L, 10 X, 11 Y)
+        uint32_t pressMask = 0;     // Keys forced down
+        uint32_t releaseMask = 0;   // Keys forced up, even if the user is holding them
+        bool touchSet = false;      // stylus.set was called
+        bool touchDown = false;
+        int touchX = 0;
+        int touchY = 0;
+    };
+
+    // Used by the joypad / stylus bindings
+    void setJoypadOverride(uint32_t pressMask, uint32_t releaseMask);
+    void setStylusOverride(bool down, int x, int y);
+    void getUserTouch(bool& isTouching, int& x, int& y);
+
+    /**
+     * Emulator thread, after onFrameStart(): returns the input to apply to the frame that is about to run and clears it.
+     */
+    InputOverride takeInputOverride();
+
     enum CallbackSlot
     {
         CallbackBefore = 0,
@@ -148,6 +174,9 @@ private:
     bool touching = false;
     int touchX = 0;
     int touchY = 0;
+
+    // Emulator thread only
+    InputOverride pendingInput;
 
     std::atomic<Status> status;
 };

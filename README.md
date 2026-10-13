@@ -74,7 +74,8 @@ boxes over the screens. In practice it is a small "DeSmuME compatibility layer" 
 | `bit` | `tobit`, `bnot`, `band`, `bor`, `bxor`, `lshift`, `rshift`, `arshift`, `rol`, `ror`, `bswap`, `tohex` | LuaBitOp semantics (wrap modulo 2^32), as embedded by DeSmuME |
 | `gui` | `text`, `box`, `line`, `pixel`, `getpixel`, `parsecolor`, `opacity`, `transparency`, `register`, `popup` (+ DeSmuME aliases) | Colours as numbers, names, `#RRGGBB[AA]`, or `{r,g,b,a}` tables |
 | `input` / `keyboard` | `get` / `read` | Keys from the on-screen 1–0 keypad and a physical keyboard; touch as `xmouse`/`ymouse`/`leftclick` |
-| `joypad` | `get` / `read` | `set` / `write` are stubs (a warning is printed once) |
+| `joypad` | `get` / `read`, `set` / `write` | `set` uses DeSmuME semantics: `true` presses, `false` forces a release, absent keys are left to the user. It applies to the next frame only, so call it every frame to hold a button |
+| `stylus` | `get` / `peek` / `read`, `set` / `write` | `{x, y, touch}` in bottom-screen coordinates; like `joypad.set`, one frame per call |
 | `emu` / `desmume` | `frameadvance`, `framecount`, `lagcount`, `emulating`, `reset`, `registerbefore`/`after`/`exit`, `message`, `getdir` | `pause`, `speedmode`... are no-ops |
 | globals | `AND`, `OR`, `XOR`, `SHIFT`, `BIT` | FCEUX-style helpers that some DeSmuME scripts still use |
 | stubs | `memory.register*`, `savestate.*`, `movie.*` | No effect |
@@ -234,7 +235,7 @@ This was added to debug crashes on a phone that was never connected to a PC (no 
 - The **hinge button** issue from [section 4](#4-the-naughty-little-button-swept-under-the-rug) is not investigated.
 - **Lua memory access** only covers the ARM9 view of ITCM, DTCM and main RAM. I/O, VRAM and ARM7 memory read 0.
 - **Memory writes from Lua** do not invalidate blocks already compiled by the JIT.
-- `joypad.set`, `memory.register*`, `savestate.*` and `movie.*` are stubs.
+- `memory.register*`, `savestate.*` and `movie.*` are stubs.
 - Script keys F1–F12 and Shift, used by some RNG scripts for their own save slots, only work with a physical keyboard.
 - **Frameskip** is lightly tested. If fast-forward freezes, the frameskip invariant is the first suspect.
 - Tested on **one device** only (Galaxy S25+, Android 16), mostly with Pokémon Platinum. The overlay orientation with
@@ -288,7 +289,9 @@ Output: `app/build/outputs/apk/gitHubProd/debug/`. Release builds need the origi
 built here.
 
 Example scripts are in `tools/lua/`. `platinum-item-and-nature.lua` shows the wild Pokémon's nature and held item in
-Pokémon Platinum, in all languages.
+Pokémon Platinum, in all languages. `Pt_Autoplay.lua` plays Platinum by itself (wild encounters with auto-flee, or soft
+resets for static and gift Pokémon) until it finds a Pokémon with the wanted species, held item, shininess, nature, IVs or
+ability. It uses `joypad.set` and `stylus.set`.
 
 ## Credits, acknowledgements and legal
 
