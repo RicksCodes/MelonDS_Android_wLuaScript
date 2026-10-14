@@ -160,6 +160,23 @@ class EmulatorViewModel @Inject constructor(
     private val _uiEvent = EventSharedFlow<EmulatorUiEvent>()
     val uiEvent = _uiEvent.asSharedFlow()
 
+    // Multi-instance: a second game that runs next to the main one and talks to it through local wireless
+    private val _secondGame = MutableStateFlow<Rom?>(null)
+    val secondGame = _secondGame.asStateFlow()
+
+    private val _isSecondGameVisible = MutableStateFlow(false)
+    val isSecondGameVisible = _isSecondGameVisible.asStateFlow()
+
+    // Save states, rewind, cheats, achievements and reset belong to the main game
+    private val mainGameOnlyOptions = setOf(
+        RomPauseMenuOption.SAVE_STATE,
+        RomPauseMenuOption.LOAD_STATE,
+        RomPauseMenuOption.REWIND,
+        RomPauseMenuOption.CHEATS,
+        RomPauseMenuOption.VIEW_ACHIEVEMENTS,
+        RomPauseMenuOption.RESET,
+    )
+
     init {
         viewModelScope.launch {
             _layout.filterNotNull().collect {
@@ -378,6 +395,9 @@ class EmulatorViewModel @Inject constructor(
     }
 
     fun resetEmulator() {
+        if (isSecondGameOnScreen()) {
+            return
+        }
         if (_emulatorState.value.isRunning()) {
             sessionCoroutineScope.launch {
                 emulatorManager.resetEmulator()
@@ -399,7 +419,10 @@ class EmulatorViewModel @Inject constructor(
         viewModelScope.launch {
             _achievementsEvent.emit(RAEventUi.Reset)
         }
+        // Stops the second game too
         emulatorManager.stopEmulator()
+        _secondGame.value = null
+        _isSecondGameVisible.value = false
         screenshotFrameBufferProvider.clearBuffer()
     }
 
@@ -454,6 +477,12 @@ class EmulatorViewModel @Inject constructor(
                     }
                     RomPauseMenuOption.VIEW_ACHIEVEMENTS -> _uiEvent.tryEmit(EmulatorUiEvent.ShowAchievementList)
                     RomPauseMenuOption.LUA_SCRIPTS -> _uiEvent.tryEmit(EmulatorUiEvent.ShowLuaScriptMenu)
+                    RomPauseMenuOption.SECOND_GAME_START -> showSecondGamePicker()
+                    RomPauseMenuOption.SECOND_GAME_SWITCH -> {
+                        switchGame()
+                        resumeEmulator()
+                    }
+                    RomPauseMenuOption.SECOND_GAME_CLOSE -> closeSecondGame()
                     RomPauseMenuOption.RESET -> resetEmulator()
                     RomPauseMenuOption.EXIT -> exitEmulator(force = false)
                 }
@@ -471,7 +500,64 @@ class EmulatorViewModel @Inject constructor(
         }
     }
 
+    private fun showSecondGamePicker() {
+        sessionCoroutineScope.launch {
+            val roms = romsRepository.getRoms().firstOrNull().orEmpty().sortedBy { it.name.lowercase() }
+            _uiEvent.emit(EmulatorUiEvent.ShowSecondGamePicker(roms))
+        }
+    }
+
+    fun startSecondGame(rom: Rom) {
+        val mainRom = (_emulatorState.value as? EmulatorState.RunningRom)?.rom ?: return
+        sessionCoroutineScope.launch {
+            if (emulatorManager.loadSecondRom(rom, mainRom)) {
+                _secondGame.value = rom
+                setSecondGameVisible(true)
+            } else {
+                _toastEvent.emit(ToastEvent.SecondGameLoadFailed)
+            }
+            emulatorManager.resumeEmulator()
+        }
+    }
+
+    /**
+     * Shows the other game. Both keep running: the hidden one is just not drawn.
+     */
+    fun switchGame() {
+        if (_secondGame.value != null) {
+            setSecondGameVisible(!_isSecondGameVisible.value)
+        }
+    }
+
+    private fun closeSecondGame() {
+        sessionCoroutineScope.launch {
+            setSecondGameVisible(false)
+            withContext(Dispatchers.IO) {
+                emulatorManager.stopSecondRom()
+            }
+            _secondGame.value = null
+            emulatorManager.resumeEmulator()
+        }
+    }
+
+    private fun setSecondGameVisible(visible: Boolean) {
+        emulatorManager.setActiveInstance(if (visible) 1 else 0)
+        _isSecondGameVisible.value = visible
+    }
+
+    private fun isSecondGameOnScreen(): Boolean {
+        if (_isSecondGameVisible.value) {
+            _toastEvent.tryEmit(ToastEvent.SecondGameFeatureUnavailable)
+            return true
+        }
+        return false
+    }
+
     fun onOpenRewind() {
+        if (isSecondGameOnScreen()) {
+            return
+        }
+
         if (!settingsRepository.isRewindEnabled()) {
             _toastEvent.tryEmit(ToastEvent.RewindNotEnabled)
             return
@@ -522,6 +608,9 @@ class EmulatorViewModel @Inject constructor(
     }
 
     fun doQuickSave() {
+        if (isSecondGameOnScreen()) {
+            return
+        }
         val currentState = _emulatorState.value
         when (currentState) {
             is EmulatorState.RunningRom -> {
@@ -544,6 +633,9 @@ class EmulatorViewModel @Inject constructor(
     }
 
     fun doQuickLoad() {
+        if (isSecondGameOnScreen()) {
+            return
+        }
         val currentState = _emulatorState.value
         when (currentState) {
             is EmulatorState.RunningRom -> {
@@ -996,6 +1088,9 @@ class EmulatorViewModel @Inject constructor(
     }
 
     private fun filterRomPauseMenuOption(option: RomPauseMenuOption): Boolean {
+        if (_isSecondGameVisible.value && option in mainGameOnlyOptions) {
+            return false
+        }
         return when (option) {
             RomPauseMenuOption.REWIND -> settingsRepository.isRewindEnabled() && emulatorSession.areSaveStateLoadsAllowed()
             RomPauseMenuOption.LOAD_STATE -> emulatorSession.areSaveStateLoadsAllowed()
@@ -1003,6 +1098,8 @@ class EmulatorViewModel @Inject constructor(
             RomPauseMenuOption.VIEW_ACHIEVEMENTS -> emulatorSession.areRetroAchievementsEnabled()
             // Scripts can read and write memory, so they are not allowed in RetroAchievements hardcore mode
             RomPauseMenuOption.LUA_SCRIPTS -> emulatorSession.areSaveStateLoadsAllowed()
+            RomPauseMenuOption.SECOND_GAME_START -> _secondGame.value == null
+            RomPauseMenuOption.SECOND_GAME_SWITCH, RomPauseMenuOption.SECOND_GAME_CLOSE -> _secondGame.value != null
             else -> true
         }
     }

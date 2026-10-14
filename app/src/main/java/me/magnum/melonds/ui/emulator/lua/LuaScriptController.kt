@@ -3,7 +3,6 @@ package me.magnum.melonds.ui.emulator.lua
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -13,7 +12,6 @@ import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.FrameLayout
@@ -30,8 +28,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.edit
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -41,8 +37,8 @@ import kotlinx.coroutines.launch
 import me.magnum.melonds.MelonEmulator
 import me.magnum.melonds.R
 import me.magnum.melonds.debug.CrashLogger
+import me.magnum.melonds.ui.emulator.component.FloatingPanels
 import java.io.File
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -395,7 +391,13 @@ class LuaScriptController(
         // While the appearance dialog is open the keypad is always open, to preview it
         showExpanded(previewKeys || preferences.getBoolean(KEY_KEYS_EXPANDED, false))
 
-        attachDragHandler(toggle, panel) {
+        val onMoved = { fractionX: Float, fractionY: Float ->
+            preferences.edit {
+                putFloat(KEY_KEYS_X, fractionX)
+                putFloat(KEY_KEYS_Y, fractionY)
+            }
+        }
+        FloatingPanels.attachDragHandler(toggle, panel, onMoved) {
             val expanded = keys.visibility != View.VISIBLE
             preferences.edit { putBoolean(KEY_KEYS_EXPANDED, expanded) }
             showExpanded(expanded)
@@ -491,87 +493,11 @@ class LuaScriptController(
         setStroke(max((1 * density).toInt(), 1), stroke)
     }
 
-    /**
-     * Dragging [handle] moves [panel]; a tap (no movement) calls [onTap].
-     */
-    @SuppressLint("ClickableViewAccessibility")
-    private fun attachDragHandler(handle: View, panel: View, onTap: () -> Unit) {
-        val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
-        var startX = 0f
-        var startY = 0f
-        var offsetX = 0f
-        var offsetY = 0f
-        var dragging = false
-
-        fun savePosition(bounds: Rect) {
-            val fractionX = if (bounds.width() > 0) (panel.x - bounds.left) / bounds.width() else 0.5f
-            val fractionY = if (bounds.height() > 0) (panel.y - bounds.top) / bounds.height() else 0f
-            preferences.edit {
-                putFloat(KEY_KEYS_X, fractionX.coerceIn(0f, 1f))
-                putFloat(KEY_KEYS_Y, fractionY.coerceIn(0f, 1f))
-            }
-        }
-
-        handle.setOnTouchListener { _, event ->
-            val bounds = movementBounds(panel) ?: return@setOnTouchListener false
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    startX = event.rawX
-                    startY = event.rawY
-                    offsetX = panel.x - event.rawX
-                    offsetY = panel.y - event.rawY
-                    dragging = false
-                    handle.alpha = 0.7f
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (!dragging && hypot(event.rawX - startX, event.rawY - startY) > touchSlop) {
-                        dragging = true
-                    }
-                    if (dragging) {
-                        panel.x = (event.rawX + offsetX).coerceIn(bounds.left.toFloat(), bounds.right.toFloat())
-                        panel.y = (event.rawY + offsetY).coerceIn(bounds.top.toFloat(), bounds.bottom.toFloat())
-                    }
-                }
-                MotionEvent.ACTION_UP -> {
-                    handle.alpha = 1f
-                    if (dragging) savePosition(bounds) else onTap()
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    handle.alpha = 1f
-                    if (dragging) savePosition(bounds)
-                }
-            }
-            true
-        }
-    }
-
-    /**
-     * Area where the panel's top-left corner can go: the whole screen minus cutouts/system bars and a small margin.
-     */
-    private fun movementBounds(panel: View): Rect? {
-        val root = panel.parent as? View ?: return null
-        if (root.width == 0 || panel.width == 0) {
-            return null
-        }
-
-        val margin = (6 * density).toInt()
-        val insets = ViewCompat.getRootWindowInsets(root)?.getInsets(WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.systemBars())
-        val left = (insets?.left ?: 0) + margin
-        val top = (insets?.top ?: 0) + margin
-        val right = max(left, root.width - (insets?.right ?: 0) - margin - panel.width)
-        val bottom = max(top, root.height - (insets?.bottom ?: 0) - margin - panel.height)
-        return Rect(left, top, right, bottom)
-    }
-
     private fun applyKeysPosition() {
         val panel = keysBar ?: return
-        val bounds = movementBounds(panel) ?: return
         // Older versions only had "top" or "bottom"
         val defaultY = if (preferences.getBoolean(KEY_KEYS_AT_BOTTOM, false)) 1f else 0f
-        val fractionX = preferences.getFloat(KEY_KEYS_X, 0.5f)
-        val fractionY = preferences.getFloat(KEY_KEYS_Y, defaultY)
-        panel.x = bounds.left + bounds.width() * fractionX
-        panel.y = bounds.top + bounds.height() * fractionY
+        FloatingPanels.place(panel, preferences.getFloat(KEY_KEYS_X, 0.5f), preferences.getFloat(KEY_KEYS_Y, defaultY))
     }
 
     private fun setKeysPosition(fractionX: Float, fractionY: Float) {

@@ -10,15 +10,18 @@ class SramProvider(
     private val uriHandler: UriHandler,
 ) {
 
+    /**
+     * @param nameSuffix Added before the extension, to give a second copy of the same game its own save file
+     */
     @Throws(SramLoadException::class)
-    fun getSramForRom(rom: Rom): Uri {
+    fun getSramForRom(rom: Rom, nameSuffix: String = ""): Uri {
         val rootDirUri = settingsRepository.getSaveFileDirectory(rom)
 
         val rootDocument = uriHandler.getUriTreeDocument(rootDirUri) ?: throw SramLoadException("Cannot create root document: $rootDirUri")
         val romDocument = uriHandler.getUriDocument(rom.uri)
 
         val romFileName = romDocument?.name ?: throw SramLoadException("Cannot determine SRAM file name: ${romDocument?.uri}")
-        val sramFileName = romFileName.replaceAfterLast('.', "sav", "$romFileName.sav")
+        val sramFileName = romFileName.replaceAfterLast('.', "sav", "$romFileName.sav").removeSuffix(".sav") + "$nameSuffix.sav"
 
         val sramDocument = rootDocument.findFile(sramFileName)
         return if (sramDocument != null) {

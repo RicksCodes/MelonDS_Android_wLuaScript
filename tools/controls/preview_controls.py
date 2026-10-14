@@ -124,9 +124,17 @@ def draw(ax, file, x, y, size):
     vp = float(root.get(NS + "viewportWidth"))
     s = size / vp
     px_per_unit = s  # figure units are pixels
-    for p in root.findall("path"):
+    # Paths and groups (only translations), in drawing order
+    items = []
+    for child in root:
+        if child.tag == "group":
+            dx, dy = float(child.get(NS + "translateX") or 0), float(child.get(NS + "translateY") or 0)
+            items += [(p, dx, dy) for p in child.findall("path")]
+        elif child.tag == "path":
+            items.append((child, 0.0, 0.0))
+    for p, dx, dy in items:
         path = parse(p.get(NS + "pathData"))
-        verts = [(x + vx * s, y + vy * s) for vx, vy in path.vertices]
+        verts = [(x + (vx + dx) * s, y + (vy + dy) * s) for vx, vy in path.vertices]
         path = MPath(verts, path.codes)
         fill = p.get(NS + "fillColor")
         stroke = p.get(NS + "strokeColor")
@@ -142,7 +150,8 @@ def main():
     W, H = 1080, 760
     fig = plt.figure(figsize=(W / 100, H / 100), dpi=100)
     ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, W); ax.set_ylim(H, 0); ax.axis("off")
-    fig.patch.set_facecolor("#20242c")
+    # Optional background colour, e.g. "#ffffff" to check the controls over a white screen
+    fig.patch.set_facecolor(sys.argv[3] if len(sys.argv) > 3 else "#20242c")
     # Fake game screen strip on top
     ax.add_patch(plt.Rectangle((0, 0), W, 70, color="#3b6b4f"))
     dp = 2.8125
@@ -155,8 +164,8 @@ def main():
         draw(ax, folder / f"{u}.xml", ux, 90 + 5 * dp, 40 * dp); ux += 48 * dp
     draw(ax, folder / "keypad.xml", 34, 300, 150 * dp)
     draw(ax, folder / "buttons.xml", W - 34 - 150 * dp, 300, 150 * dp)
-    draw(ax, folder / "button_select.xml", W / 2 - 44 * dp, 300 + 110 * dp, 40 * dp)
-    draw(ax, folder / "button_start.xml", W / 2 + 4 * dp, 300 + 110 * dp, 40 * dp)
+    draw(ax, folder / "button_start.xml", W / 2 - 44 * dp, 300 + 110 * dp, 40 * dp)
+    draw(ax, folder / "button_select.xml", W / 2 + 4 * dp, 300 + 110 * dp, 40 * dp)
     # Second row: remaining icons
     rest = ["button_fast_forward_disabled", "button_microphone_disabled", "ic_touch_disabled", "button_rewind",
             "button_reset", "button_swap_screens", "button_quick_save", "button_quick_load"]

@@ -47,6 +47,7 @@ import androidx.window.layout.WindowInfoTracker
 import com.squareup.picasso.Picasso
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 import me.magnum.melonds.MelonEmulator
@@ -76,6 +77,7 @@ import me.magnum.melonds.parcelables.RomParcelable
 import me.magnum.melonds.ui.cheats.CheatsActivity
 import me.magnum.melonds.ui.common.rom.EmulatorLaunchValidatorDelegate
 import me.magnum.melonds.ui.emulator.component.EmulatorOverlayTracker
+import me.magnum.melonds.ui.emulator.component.GameSwitchButton
 import me.magnum.melonds.ui.emulator.input.ConnectedControllerManager
 import me.magnum.melonds.ui.emulator.input.EmulatorMotionManager
 import me.magnum.melonds.ui.emulator.input.EmulatorRumbleManager
@@ -259,6 +261,11 @@ class EmulatorActivity : AppCompatActivity() {
         activity = this,
         rootProvider = { binding.root },
         onResumeEmulator = { viewModel.resumeEmulator() },
+    )
+    private val gameSwitchButton = GameSwitchButton(
+        activity = this,
+        rootProvider = { binding.root },
+        onSwitch = { viewModel.switchGame() },
     )
     private val permissionRequestLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         lifecycleScope.launch {
@@ -462,6 +469,13 @@ class EmulatorActivity : AppCompatActivity() {
         }
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                combine(viewModel.secondGame, viewModel.isSecondGameVisible) { secondGame, isVisible -> (secondGame != null) to isVisible }.collect {
+                    gameSwitchButton.update(isSecondGameRunning = it.first, isSecondGameVisible = it.second)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.currentFps.collectLatest {
                     if (it == null) {
                         binding.textFps.text = null
@@ -489,6 +503,8 @@ class EmulatorActivity : AppCompatActivity() {
                         ToastEvent.CannotSwitchRetroAchievementsMode -> R.string.retro_achievements_relaunch_to_apply_settings to Toast.LENGTH_LONG
                         ToastEvent.GbaModeNotSupported -> R.string.emulator_stop_gba_mode_unsupported to Toast.LENGTH_SHORT
                         ToastEvent.InternalError -> R.string.emulator_stop_internal_error to Toast.LENGTH_LONG
+                        ToastEvent.SecondGameLoadFailed -> R.string.second_game_load_failed to Toast.LENGTH_LONG
+                        ToastEvent.SecondGameFeatureUnavailable -> R.string.second_game_feature_unavailable to Toast.LENGTH_SHORT
                     }
 
                     Toast.makeText(this@EmulatorActivity, message, duration).show()
@@ -525,6 +541,7 @@ class EmulatorActivity : AppCompatActivity() {
                             }
                         }
                         EmulatorUiEvent.ShowLuaScriptMenu -> luaScriptController.showMenu()
+                        is EmulatorUiEvent.ShowSecondGamePicker -> showSecondGamePicker(it.roms)
                         EmulatorUiEvent.ShowAchievementList -> {
                             activeOverlays.addActiveOverlay(EmulatorOverlay.ACHIEVEMENTS_DIALOG)
                             showAchievementList.value = true
@@ -876,6 +893,28 @@ class EmulatorActivity : AppCompatActivity() {
                 .setItems(options) { _, which ->
                     val selectedOption = pauseMenu.options[which]
                     viewModel.onPauseMenuOptionSelected(selectedOption)
+                }
+                .setOnDismissListener {
+                    activeOverlays.removeActiveOverlay(EmulatorOverlay.PAUSE_MENU)
+                }
+                .setOnCancelListener {
+                    viewModel.resumeEmulator()
+                }
+                .show()
+    }
+
+    private fun showSecondGamePicker(roms: List<Rom>) {
+        if (roms.isEmpty()) {
+            Toast.makeText(this, R.string.second_game_no_roms, Toast.LENGTH_SHORT).show()
+            viewModel.resumeEmulator()
+            return
+        }
+
+        activeOverlays.addActiveOverlay(EmulatorOverlay.PAUSE_MENU)
+        AlertDialog.Builder(this)
+                .setTitle(R.string.second_game_pick)
+                .setItems(roms.map { it.name }.toTypedArray()) { _, which ->
+                    viewModel.startSecondGame(roms[which])
                 }
                 .setOnDismissListener {
                     activeOverlays.removeActiveOverlay(EmulatorOverlay.PAUSE_MENU)

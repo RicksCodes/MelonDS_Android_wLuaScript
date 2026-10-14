@@ -57,7 +57,7 @@ android {
         }
         getByName("debug") {
             applicationIdSuffix = ".dev"
-            versionNameSuffix = "-lua-v10"
+            versionNameSuffix = "-lua-v14"
             // The emulator core is far too slow without optimizations (audio slowdowns, flickering frames). Build the
             // native code optimized, keeping debug symbols to read crash reports.
             externalNativeBuild {

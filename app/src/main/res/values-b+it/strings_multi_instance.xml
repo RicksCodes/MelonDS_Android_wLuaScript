@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="second_game_start">Avvia un secondo gioco…</string>
+    <string name="second_game_switch">Cambia gioco (1 ⇄ 2)</string>
+    <string name="second_game_close">Chiudi il secondo gioco</string>
+    <string name="second_game_pick">Secondo gioco (wireless locale)</string>
+    <string name="second_game_no_roms">Nessuna ROM trovata</string>
+    <string name="second_game_load_failed">Impossibile avviare il secondo gioco</string>
+    <string name="second_game_feature_unavailable">Non disponibile mentre è visibile il secondo gioco</string>
+</resources>

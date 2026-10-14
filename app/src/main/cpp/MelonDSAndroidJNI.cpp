@@ -43,9 +43,12 @@ pthread_cond_t emuThreadCond;
 
 bool started = false;
 bool stop;
+// Multi-instance: the second game runs on its own thread, which shares the pause state with the main one
+pthread_t secondEmuThread;
+bool secondStarted = false;
+bool stopSecond = false;
 bool paused;
 std::atomic_bool isThreadReallyPaused = false;
-int observedFrames = 0;
 float fps = 0;
 int targetFps;
 float fastForwardSpeedMultiplier;
@@ -58,7 +61,9 @@ MelonDSAndroidCameraHandler* androidCameraHandler;
 
 static const int64_t FRAME_DURATION_60FPS_NS = 16666666;
 static const int64_t FRAME_DURATION_1000FPS_NS = 1000000; // 1ms. Used as frame time when fast-forward is enabled
-ThreadSafePerformanceHintSession* performanceHintSession = nullptr;
+ThreadSafePerformanceHintSession* performanceHintSessions[2] = { nullptr, nullptr };
+
+void stopSecondEmulatorThread();
 
 extern "C"
 {
@@ -253,7 +258,7 @@ Java_me_magnum_melonds_MelonEmulator_startEmulation(JNIEnv* env, jobject thiz)
 
     pthread_mutex_init(&emuThreadMutex, NULL);
     pthread_cond_init(&emuThreadCond, NULL);
-    pthread_create(&emuThread, NULL, emulate, NULL);
+    pthread_create(&emuThread, NULL, emulate, (void*) 0);
     pthread_setname_np(emuThread, "EmulatorThread");
 
     started = true;
@@ -457,6 +462,8 @@ Java_me_magnum_melonds_MelonEmulator_getRewindWindow(JNIEnv* env, jobject thiz) 
 JNIEXPORT void JNICALL
 Java_me_magnum_melonds_MelonEmulator_stopEmulation(JNIEnv* env, jobject thiz)
 {
+    stopSecondEmulatorThread();
+
     if (started)
     {
         pthread_mutex_lock(&emuThreadMutex);
@@ -529,7 +536,10 @@ Java_me_magnum_melonds_MelonEmulator_setFastForwardEnabled(JNIEnv* env, jobject 
         targetFps = 60;
     }
 
-    if (performanceHintSession != nullptr) {
+    for (auto performanceHintSession : performanceHintSessions) {
+        if (performanceHintSession == nullptr)
+            continue;
+
         if (enabled) {
             if (fastForwardSpeedMultiplier > 0) {
                 auto frameDurationNs = static_cast<int64_t>(FRAME_DURATION_60FPS_NS / fastForwardSpeedMultiplier);
@@ -567,7 +577,10 @@ Java_me_magnum_melonds_MelonEmulator_updateEmulatorConfiguration(JNIEnv* env, jo
         limitFps = fastForwardSpeedMultiplier > 0;
         targetFps = 60 * fastForwardSpeedMultiplier;
 
-        if (performanceHintSession != nullptr) {
+        for (auto performanceHintSession : performanceHintSessions) {
+            if (performanceHintSession == nullptr)
+                continue;
+
             if (fastForwardSpeedMultiplier > 0) {
                 auto frameDurationNs = static_cast<int64_t>(FRAME_DURATION_60FPS_NS / fastForwardSpeedMultiplier);
                 performanceHintSession->updateTargetWorkDuration(frameDurationNs);
@@ -636,6 +649,51 @@ Java_me_magnum_melonds_MelonEmulator_setLuaOverlayOpacity(JNIEnv* env, jobject t
 {
     MelonDSAndroid::Lua::setOverlayOpacity(opacity);
 }
+
+JNIEXPORT jboolean JNICALL
+Java_me_magnum_melonds_MelonEmulator_startSecondInstanceInternal(JNIEnv* env, jobject thiz, jstring romPath, jstring sramPath)
+{
+    if (!started || secondStarted)
+        return JNI_FALSE;
+
+    if (!MelonDSAndroid::loadSecondInstance(jstringToStdString(env, romPath), jstringToStdString(env, sramPath)))
+        return JNI_FALSE;
+
+    pthread_mutex_lock(&emuThreadMutex);
+    stopSecond = false;
+    pthread_mutex_unlock(&emuThreadMutex);
+
+    pthread_create(&secondEmuThread, NULL, emulate, (void*) 1);
+    pthread_setname_np(secondEmuThread, "EmulatorThread2");
+    secondStarted = true;
+    return JNI_TRUE;
+}
+
+JNIEXPORT void JNICALL
+Java_me_magnum_melonds_MelonEmulator_stopSecondInstance(JNIEnv* env, jobject thiz)
+{
+    stopSecondEmulatorThread();
+}
+
+JNIEXPORT void JNICALL
+Java_me_magnum_melonds_MelonEmulator_setActiveInstance(JNIEnv* env, jobject thiz, jint index)
+{
+    MelonDSAndroid::setActiveInstance(index);
+}
+}
+
+void stopSecondEmulatorThread()
+{
+    if (!secondStarted)
+        return;
+
+    pthread_mutex_lock(&emuThreadMutex);
+    stopSecond = true;
+    pthread_cond_broadcast(&emuThreadCond);
+    pthread_mutex_unlock(&emuThreadMutex);
+
+    pthread_join(secondEmuThread, NULL);
+    secondStarted = false;
 }
 
 MelonDSAndroid::RomGbaSlotConfig* buildGbaSlotConfig(GbaSlotType slotType, const char* romPath, const char* savePath)
@@ -676,35 +734,43 @@ double getCurrentMillis() {
     return (now.tv_sec * 1000.0) + now.tv_nsec / 1000000.0;
 }
 
-void* emulate(void*)
+void* emulate(void* arg)
 {
+    // 0 = main game, 1 = second game (multi-instance)
+    int index = (int) (intptr_t) arg;
+    bool isMainThread = index == 0;
+    int observedFrames = 0;
+
     double startTick = getCurrentMillis();
     double lastTick = startTick;
     double lastMeasureFpsTick = startTick;
     double frameLimitError = 0.0;
 
-    MelonDSAndroid::start();
+    MelonDSAndroid::start(index);
 
     auto manager = PerformanceHintManagerFactory::create(jniEnvHandler);
-    performanceHintSession = new ThreadSafePerformanceHintSession(std::move(manager));
-    if (performanceHintSession != nullptr) {
-        performanceHintSession->createSession(gettid(), FRAME_DURATION_60FPS_NS);
-    }
+    auto performanceHintSession = new ThreadSafePerformanceHintSession(std::move(manager));
+    performanceHintSession->createSession(gettid(), FRAME_DURATION_60FPS_NS);
+    performanceHintSessions[index] = performanceHintSession;
 
     for (;;)
     {
         pthread_mutex_lock(&emuThreadMutex);
-        if (paused) {
-            isThreadReallyPaused = true;
-            while (paused && !stop)
+        bool mustStop = stop || (!isMainThread && stopSecond);
+        if (paused && !mustStop) {
+            if (isMainThread)
+                isThreadReallyPaused = true;
+            while (paused && !stop && (isMainThread || !stopSecond))
                 pthread_cond_wait(&emuThreadCond, &emuThreadMutex);
 
             frameLimitError = 0;
             lastTick = getCurrentMillis();
-            isThreadReallyPaused = false;
+            if (isMainThread)
+                isThreadReallyPaused = false;
+            mustStop = stop || (!isMainThread && stopSecond);
         }
 
-        if (stop) {
+        if (mustStop) {
             pthread_mutex_unlock(&emuThreadMutex);
             break;
         }
@@ -713,7 +779,7 @@ void* emulate(void*)
 
         auto frameStart = std::chrono::steady_clock::now();
 
-        u32 nLines = MelonDSAndroid::loop();
+        u32 nLines = MelonDSAndroid::loop(index);
 
         auto frameDuration = std::chrono::steady_clock::now() - frameStart;
         if (performanceHintSession != nullptr)
@@ -755,19 +821,18 @@ void* emulate(void*)
 
         observedFrames++;
         if (observedFrames >= 30) {
-            fps = (observedFrames * 1000.0) / (lastTick - lastMeasureFpsTick);
+            // The counter shows the speed of the game on screen
+            if (index == MelonDSAndroid::getActiveInstanceIndex())
+                fps = (observedFrames * 1000.0) / (lastTick - lastMeasureFpsTick);
             lastMeasureFpsTick = lastTick;
             observedFrames = 0;
         }
     }
 
-    if (performanceHintSession != nullptr) {
-        performanceHintSession->destroySession();
+    performanceHintSessions[index] = nullptr;
+    performanceHintSession->destroySession();
+    delete performanceHintSession;
 
-        delete performanceHintSession;
-        performanceHintSession = nullptr;
-    }
-
-    MelonDSAndroid::stop();
+    MelonDSAndroid::stop(index);
     pthread_exit(NULL);
 }

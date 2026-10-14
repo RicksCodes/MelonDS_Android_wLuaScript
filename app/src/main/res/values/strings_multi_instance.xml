@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="second_game_start">Start a second game…</string>
+    <string name="second_game_switch">Switch game (1 ⇄ 2)</string>
+    <string name="second_game_close">Close the second game</string>
+    <string name="second_game_pick">Second game (local wireless)</string>
+    <string name="second_game_no_roms">No ROMs found</string>
+    <string name="second_game_load_failed">Could not start the second game</string>
+    <string name="second_game_feature_unavailable">Not available while the second game is on screen</string>
+</resources>

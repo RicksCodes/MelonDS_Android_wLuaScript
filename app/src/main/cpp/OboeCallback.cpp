@@ -11,9 +11,18 @@ OboeCallback::OboeCallback(int volume, void (*onErrorCallback)(void), std::ostre
     audioSampleFrac = 0;
 }
 
+void OboeCallback::setActiveInstance(std::weak_ptr<MelonDSAndroid::MelonInstance> instance) {
+    std::lock_guard lock(activeInstanceMutex);
+    activeInstance = std::move(instance);
+}
+
 oboe::DataCallbackResult
 OboeCallback::onAudioReady(oboe::AudioStream *stream, void *audioData, int32_t numFrames) {
-    auto currentInstance = activeInstance.lock();
+    std::shared_ptr<MelonDSAndroid::MelonInstance> currentInstance;
+    {
+        std::lock_guard lock(activeInstanceMutex);
+        currentInstance = activeInstance.lock();
+    }
 
     if (!currentInstance)
     {

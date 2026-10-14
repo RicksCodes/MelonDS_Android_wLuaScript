@@ -48,7 +48,7 @@ namespace MelonDSAndroid
         outputCallback = std::make_shared<OboeCallback>(volume, resetAudioOutputStream);
         stabilizedOutputCallback = std::make_shared<oboe::StabilizedCallback>(outputCallback.get());
 
-        outputCallback->activeInstance = activeInstance;
+        outputCallback->setActiveInstance(activeInstance);
 
         oboe::AudioStreamBuilder streamBuilder;
         streamBuilder.setChannelCount(2);
@@ -283,7 +283,7 @@ namespace MelonDSAndroid
     {
         activeInstance = instance;
         if (outputCallback)
-            outputCallback->activeInstance = activeInstance;
+            outputCallback->setActiveInstance(activeInstance);
     }
 
     void cleanupAudio()

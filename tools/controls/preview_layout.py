@@ -32,7 +32,7 @@ pad = max(minp, min(maxp, min(wfp, max(hfp, minp))))
 pads_top = pads_area_top + (hfp - pad) // 2 if center_pads and hfp > pad else bottom - pad
 comps += [("keypad", left, pads_top, pad), ("buttons", right - pad, pads_top, pad)]
 st = pads_top + pad - small
-comps += [("button_select", cx - gap // 2 - small, st, small), ("button_start", cx + gap // 2, st, small)]
+comps += [("button_start", cx - gap // 2 - small, st, small), ("button_select", cx + gap // 2, st, small)]
 print("pad dp:", pad / dp, "spacing dp:", spacing / dp, "free below screens dp:", (H - screens_bottom) / dp)
 
 scale = 0.4

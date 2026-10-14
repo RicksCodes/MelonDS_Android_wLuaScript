@@ -252,8 +252,8 @@ class DefaultLayoutProvider(
         components += PositionedLayoutComponent(Rect(right - padSize, padsTop, padSize, padSize), LayoutComponent.BUTTONS)
 
         val startSelectTop = padsTop + padSize - smallButtonsSize
-        components += PositionedLayoutComponent(Rect(centerX - gap / 2 - smallButtonsSize, startSelectTop, smallButtonsSize, smallButtonsSize), LayoutComponent.BUTTON_SELECT)
-        components += PositionedLayoutComponent(Rect(centerX + gap / 2, startSelectTop, smallButtonsSize, smallButtonsSize), LayoutComponent.BUTTON_START)
+        components += PositionedLayoutComponent(Rect(centerX - gap / 2 - smallButtonsSize, startSelectTop, smallButtonsSize, smallButtonsSize), LayoutComponent.BUTTON_START)
+        components += PositionedLayoutComponent(Rect(centerX + gap / 2, startSelectTop, smallButtonsSize, smallButtonsSize), LayoutComponent.BUTTON_SELECT)
 
         return components
     }

@@ -11,7 +11,8 @@ public:
     bool InitContext(long sharedGlContext);
     bool Use();
     void Release();
-    void DeInit();
+    // A context that shares the display with another one (second emulator instance) must not terminate it
+    void DeInit(bool terminateDisplay = true);
     [[nodiscard]] EGLContext GetContext() const { return glContext; }
 
 private:

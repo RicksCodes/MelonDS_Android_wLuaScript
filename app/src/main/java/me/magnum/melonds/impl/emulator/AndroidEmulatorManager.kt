@@ -213,6 +213,27 @@ class AndroidEmulatorManager(
         MelonEmulator.takeScreenshot()
     }
 
+    override suspend fun loadSecondRom(rom: Rom, mainRom: Rom): Boolean = withContext(Dispatchers.IO) {
+        val fileRomDocument = DocumentFile.fromSingleUri(context, rom.uri) ?: return@withContext false
+        val romUri = romFileProcessorFactory.getFileRomProcessorForDocument(fileRomDocument)?.getRealRomUri(rom) ?: return@withContext false
+        val sram = try {
+            // The same game twice gets a second save file, otherwise both copies would write to the same one
+            sramProvider.getSramForRom(rom, if (rom.hasSameFileAsRom(mainRom)) SECOND_INSTANCE_SAVE_SUFFIX else "")
+        } catch (exception: SramLoadException) {
+            return@withContext false
+        }
+
+        MelonEmulator.startSecondInstance(romUri, sram)
+    }
+
+    override fun stopSecondRom() {
+        MelonEmulator.stopSecondInstance()
+    }
+
+    override fun setActiveInstance(index: Int) {
+        MelonEmulator.setActiveInstance(index)
+    }
+
     override fun stopEmulator() {
         MelonEmulator.stopEmulation()
         cameraManager.stopCurrentCameraSource()
@@ -289,5 +310,8 @@ class AndroidEmulatorManager(
         private const val GBAModeNotSupported = 2
         private const val BadExceptionRegion = 3
         private const val PowerOff = 4
+
+        // "Game.nds" -> "Game.2.sav" when the second game is a copy of the main one
+        private const val SECOND_INSTANCE_SAVE_SUFFIX = ".2"
     }
 }

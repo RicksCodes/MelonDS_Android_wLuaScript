@@ -172,6 +172,24 @@ object MelonEmulator {
      */
     external fun setLuaOverlayOpacity(opacity: Float)
 
+    // Multi-instance: a second game that talks to the main one through local wireless, like melonDS on PC
+
+    /**
+     * Loads [romUri] in a second emulated console and starts it, hidden. Only one second game can run at a time.
+     */
+    fun startSecondInstance(romUri: Uri, sramUri: Uri): Boolean {
+        return startSecondInstanceInternal(romUri.toString(), sramUri.toString())
+    }
+
+    private external fun startSecondInstanceInternal(romPath: String, sramPath: String): Boolean
+
+    external fun stopSecondInstance()
+
+    /**
+     * Selects the game that is shown and receives the input, the audio and the Lua calls: 0 = main game, 1 = second game.
+     */
+    external fun setActiveInstance(index: Int)
+
     /**
      * Installs native signal handlers that write a crash report to [reportPath] (diagnostics for the Lua build).
      */

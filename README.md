@@ -288,7 +288,9 @@ Requirements:
 Output: `app/build/outputs/apk/gitHubProd/debug/`. Release builds need the original author's keystore and were never
 built here.
 
-Example scripts are in `tools/lua/`. `platinum-item-and-nature.lua` shows the wild Pokémon's nature and held item in
+Example scripts are in `tools/lua/`. They were written for testing, starting from the Gen 4 scripts recommended by
+[pokemonrng.com](https://www.pokemonrng.com) ([Real96/PokeLua](https://github.com/Real96/PokeLua/tree/main/Gen%204)),
+and gave good results. `platinum-item-and-nature.lua` shows the wild Pokémon's nature and held item in
 Pokémon Platinum, in all languages. `Pt_Autoplay.lua` plays Platinum by itself (wild encounters with auto-flee, or soft
 resets for static and gift Pokémon) until it finds a Pokémon with the wanted species, held item, shininess, nature, IVs or
 ability. It uses `joypad.set` and `stylus.set`.
@@ -301,8 +303,10 @@ ability. It uses `joypad.set` and `stylus.set`.
 - **Rafael Caetano (rafaelvcaetano) and the melonDS Android contributors**, for the Android port this fork is built on.
   Every feature here builds on their frontend, renderers, layout system and settings.
 - **The DeSmuME team**, whose Lua scripting API this fork imitates so that existing scripts run unchanged.
-- **The Pokémon RNG community**, in particular the authors of `Pt_RNG_DeSmuMe.lua`, whose research (pointers, data
-  layout, decryption) the example scripts are based on.
+- **The Pokémon RNG community**, in particular **Real96** and the authors of the
+  [PokeLua](https://github.com/Real96/PokeLua/tree/main/Gen%204) scripts (`Pt_RNG_DeSmuMe.lua`) linked by
+  [pokemonrng.com](https://www.pokemonrng.com), whose research (pointers, data layout, decryption) the example scripts
+  are based on.
 - **Lua.org / PUC-Rio** (Roberto Ierusalimschy, Luiz Henrique de Figueiredo, Waldemar Celes) for Lua, and
   **Mike Pall** for the LuaBitOp semantics reproduced in the `bit` library.
 - **Google** for the Roboto typeface used in the button labels, and the authors of the X11 misc-fixed fonts.

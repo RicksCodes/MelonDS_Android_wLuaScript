@@ -40,6 +40,29 @@ namespace MelonDSAndroid
 
     std::shared_ptr<MelonInstance> instance;
 
+    // Multi-instance. The second game is created and destroyed while the main one runs, so it is always accessed
+    // atomically
+    std::shared_ptr<MelonInstance> secondInstance;
+    OpenGLContext* secondGlContext = nullptr;
+    std::atomic_int activeInstanceIndex = 0;
+    u32* screenshotBuffer = nullptr;
+
+    std::shared_ptr<MelonInstance> getSecondInstance()
+    {
+        return std::atomic_load(&secondInstance);
+    }
+
+    // The game on screen, which receives the input
+    std::shared_ptr<MelonInstance> getActiveInstance()
+    {
+        if (activeInstanceIndex == 1)
+        {
+            if (auto second = getSecondInstance())
+                return second;
+        }
+        return instance;
+    }
+
     bool setupOpenGlContext();
     void cleanupOpenGlContext();
 
@@ -63,6 +86,13 @@ namespace MelonDSAndroid
         cameraHandler = androidCameraHandler;
         eventMessenger = androidEventMessenger;
         RetroAchievements::RetroAchievementsManager::EventMessenger = androidEventMessenger;
+        screenshotBuffer = screenshotBufferPointer;
+        activeInstanceIndex = 0;
+
+        // Local wireless between instances. With a single game it behaves like no connection at all (as on PC,
+        // where it is the default)
+        if (MPInterface::GetType() != MPInterface_Local)
+            MPInterface::Set(MPInterface_Local);
 
         auto instanceArgs = BuildArgsFromConfiguration(*currentConfiguration, instanceId);
         if (!instanceArgs.has_value())
@@ -121,6 +151,8 @@ namespace MelonDSAndroid
     void updateEmulatorConfiguration(std::unique_ptr<EmulatorConfiguration> emulatorConfiguration) {
         std::shared_ptr<EmulatorConfiguration> sharedConfig = std::move(emulatorConfiguration);
         instance->updateConfiguration(sharedConfig);
+        if (auto second = getSecondInstance())
+            second->updateConfiguration(sharedConfig);
         updateAudioSettings(sharedConfig->audioSettings);
 
         currentConfiguration = sharedConfig;
@@ -168,54 +200,65 @@ namespace MelonDSAndroid
 
     void touchScreen(u16 x, u16 y)
     {
-        if (instance)
-            instance->touchScreen(x, y);
+        if (auto activeInstance = getActiveInstance())
+            activeInstance->touchScreen(x, y);
     }
 
     void releaseScreen()
     {
-        if (instance)
-            instance->releaseScreen();
+        if (auto activeInstance = getActiveInstance())
+            activeInstance->releaseScreen();
     }
 
     void pressKey(u32 key)
     {
-        if (instance)
-            instance->pressKey(key);
+        if (auto activeInstance = getActiveInstance())
+            activeInstance->pressKey(key);
     }
 
     void releaseKey(u32 key)
     {
-        if (instance)
-            instance->releaseKey(key);
+        if (auto activeInstance = getActiveInstance())
+            activeInstance->releaseKey(key);
     }
 
     void updateMotionData(float ax, float ay, float az, float rx, float ry, float rz)
     {
-        if (instance)
-            instance->updateMotionData(ax, ay, az, rx, ry, rz);
+        if (auto activeInstance = getActiveInstance())
+            activeInstance->updateMotionData(ax, ay, az, rx, ry, rz);
     }
 
-    void start()
+    void start(int index)
     {
+        if (index == 1)
+        {
+            secondGlContext->Use();
+            getSecondInstance()->start();
+            return;
+        }
+
         startAudio();
         setupOpenGlContext();
 
         instance->start();
     }
 
-    u32 loop()
+    u32 loop(int index)
     {
+        if (index == 1)
+            return getSecondInstance()->runFrame();
+
         MPInterface::Get().Process();
         return instance->runFrame();
     }
 
     Frame* getPresentationFrame(std::optional<std::chrono::time_point<std::chrono::steady_clock>> deadline)
     {
-        if (!instance)
+        auto activeInstance = getActiveInstance();
+        if (!activeInstance)
             return nullptr;
 
-        return instance->getPresentationFrame(deadline);
+        return activeInstance->getPresentationFrame(deadline);
     }
 
     void pause()
@@ -365,32 +408,34 @@ namespace MelonDSAndroid
         auto currentInstance = instance;
         if (currentInstance)
             currentInstance->setFastForwardFrameSkip(enabled);
+        if (auto second = getSecondInstance())
+            second->setFastForwardFrameSkip(enabled);
     }
 
     void loadLuaScript(std::string scriptName, std::string source, std::string workDir)
     {
-        auto currentInstance = instance;
+        auto currentInstance = getActiveInstance();
         if (currentInstance)
             currentInstance->getLuaEngine()->requestLoad(std::move(scriptName), std::move(source), std::move(workDir));
     }
 
     void stopLuaScript()
     {
-        auto currentInstance = instance;
+        auto currentInstance = getActiveInstance();
         if (currentInstance)
             currentInstance->getLuaEngine()->requestStop();
     }
 
     void setLuaKeyState(const std::string& key, bool pressed)
     {
-        auto currentInstance = instance;
+        auto currentInstance = getActiveInstance();
         if (currentInstance)
             currentInstance->getLuaEngine()->setKeyState(key, pressed);
     }
 
     std::string pollLuaOutput()
     {
-        auto currentInstance = instance;
+        auto currentInstance = getActiveInstance();
         if (currentInstance)
             return currentInstance->getLuaEngine()->pollOutput();
         return "";
@@ -398,14 +443,28 @@ namespace MelonDSAndroid
 
     int getLuaStatus()
     {
-        auto currentInstance = instance;
+        auto currentInstance = getActiveInstance();
         if (currentInstance)
             return static_cast<int>(currentInstance->getLuaEngine()->getStatus());
         return 0;
     }
 
-    void stop()
+    void stop(int index)
     {
+        if (index == 1)
+        {
+            auto second = getSecondInstance();
+            second->stop();
+            // Tell the main game that the other console left, so it doesn't keep waiting for its replies
+            MPInterface::Get().End(1);
+            setActiveInstance(0);
+            std::atomic_store(&secondInstance, std::shared_ptr<MelonInstance>());
+            // Destroyed here, while its OpenGL context is still current, so that its textures are freed
+            second = nullptr;
+            secondGlContext->Release();
+            return;
+        }
+
         instance->stop();
         cleanupOpenGlContext();
     }
@@ -415,7 +474,76 @@ namespace MelonDSAndroid
         cleanupAudio();
 
         instance = nullptr;
+        std::atomic_store(&secondInstance, std::shared_ptr<MelonInstance>());
+        activeInstanceIndex = 0;
+        if (secondGlContext)
+        {
+            secondGlContext->DeInit(false);
+            delete secondGlContext;
+            secondGlContext = nullptr;
+        }
         eventMessenger = nullptr;
+    }
+
+    bool loadSecondInstance(std::string romPath, std::string sramPath)
+    {
+        if (!instance || getSecondInstance() || !openGlContext)
+            return false;
+
+        auto instanceArgs = BuildArgsFromConfiguration(*currentConfiguration, 1);
+        if (!instanceArgs.has_value())
+            return false;
+
+        if (!secondGlContext)
+        {
+            secondGlContext = new OpenGLContext();
+            // Shared with the main context, so that the frames of both games can be shown by the same view
+            if (!secondGlContext->InitContext((long) openGlContext->GetContext()))
+            {
+                delete secondGlContext;
+                secondGlContext = nullptr;
+                return false;
+            }
+        }
+
+        auto newInstance = std::make_shared<MelonInstance>(
+            1,
+            currentConfiguration,
+            std::move(instanceArgs.value()),
+            net,
+            std::make_unique<ScreenshotRenderer>(screenshotBuffer),
+            currentConfiguration->consoleType
+        );
+        if (!newInstance->loadRom(std::move(romPath), std::move(sramPath)))
+            return false;
+
+        newInstance->setHidden(true);
+        newInstance->setFastForwardFrameSkip(instance->isFastForwardFrameSkipEnabled());
+        std::atomic_store(&secondInstance, newInstance);
+        return true;
+    }
+
+    void setActiveInstance(int index)
+    {
+        auto second = getSecondInstance();
+        if (!second)
+            index = 0;
+        if (index == activeInstanceIndex)
+            return;
+
+        auto previous = getActiveInstance();
+        activeInstanceIndex = index;
+        auto current = getActiveInstance();
+
+        previous->releaseAllInput();
+        previous->setHidden(true);
+        current->setHidden(false);
+        setAudioActiveInstance(current);
+    }
+
+    int getActiveInstanceIndex()
+    {
+        return activeInstanceIndex;
     }
 
     bool setupOpenGlContext()

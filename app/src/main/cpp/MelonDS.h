@@ -59,8 +59,9 @@ namespace MelonDSAndroid {
     extern void pressKey(u32 key);
     extern void releaseKey(u32 key);
     extern void updateMotionData(float ax, float ay, float az, float rx, float ry, float rz);
-    extern void start();
-    extern u32 loop();
+    // index: 0 = main game, 1 = second game (multi-instance). Called on that instance's emulator thread.
+    extern void start(int index);
+    extern u32 loop(int index);
     extern Frame* getPresentationFrame(std::optional<std::chrono::time_point<std::chrono::steady_clock>> deadline);
     extern void pause();
     extern void resume();
@@ -83,8 +84,19 @@ namespace MelonDSAndroid {
     extern void setLuaKeyState(const std::string& key, bool pressed);
     extern std::string pollLuaOutput();
     extern int getLuaStatus();
-    extern void stop();
+    extern void stop(int index);
     extern void cleanup();
+
+    /**
+     * Multi-instance, like melonDS on PC: a second game runs next to the main one and the two talk through local
+     * wireless (trades, battles, Download Play). Only one game is shown at a time: input, video, audio and Lua go to
+     * the visible one. Save states, rewind, cheats and achievements always belong to the main game.
+     *
+     * @return true if the ROM was loaded. The second game is then started on its own thread with start(1)
+     */
+    extern bool loadSecondInstance(std::string romPath, std::string sramPath);
+    extern void setActiveInstance(int index);
+    extern int getActiveInstanceIndex();
 }
 
 #endif //MELONDS_MELONDS_H

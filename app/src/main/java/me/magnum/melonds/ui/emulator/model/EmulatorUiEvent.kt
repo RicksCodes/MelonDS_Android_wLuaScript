@@ -3,6 +3,7 @@ package me.magnum.melonds.ui.emulator.model
 import me.magnum.melonds.domain.model.rewind.RewindWindowPosition
 import me.magnum.melonds.domain.model.RomInfo
 import me.magnum.melonds.domain.model.SaveStateSlot
+import me.magnum.melonds.domain.model.rom.Rom
 import me.magnum.melonds.ui.emulator.rewind.model.RewindWindow
 
 sealed class EmulatorUiEvent {
@@ -20,6 +21,7 @@ sealed class EmulatorUiEvent {
     }
     data object ShowAchievementList : EmulatorUiEvent()
     data object ShowLuaScriptMenu : EmulatorUiEvent()
+    data class ShowSecondGamePicker(val roms: List<Rom>) : EmulatorUiEvent()
     data object ShowPendingSubmissionsDialog : EmulatorUiEvent()
     data object CloseEmulator : EmulatorUiEvent()
 }

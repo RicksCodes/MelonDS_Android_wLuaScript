@@ -212,7 +212,7 @@ void OpenGLContext::Release()
     eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 }
 
-void OpenGLContext::DeInit()
+void OpenGLContext::DeInit(bool terminateDisplay)
 {
     if (display == EGL_NO_DISPLAY)
         return;
@@ -225,7 +225,8 @@ void OpenGLContext::DeInit()
     if (glContext != EGL_NO_CONTEXT)
         eglDestroyContext(display, glContext);
 
-    eglTerminate(display);
+    if (terminateDisplay)
+        eglTerminate(display);
 
     display = EGL_NO_DISPLAY;
     surface = EGL_NO_SURFACE;

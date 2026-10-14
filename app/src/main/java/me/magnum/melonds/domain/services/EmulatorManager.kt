@@ -47,6 +47,15 @@ interface EmulatorManager {
 
     suspend fun takeScreenshot(): Boolean
 
+    /**
+     * Starts [rom] as a second game next to [mainRom] (multi-instance).
+     */
+    suspend fun loadSecondRom(rom: Rom, mainRom: Rom): Boolean
+
+    fun stopSecondRom()
+
+    fun setActiveInstance(index: Int)
+
     fun stopEmulator()
 
     fun cleanEmulator()

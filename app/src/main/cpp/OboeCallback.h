@@ -3,6 +3,7 @@
 
 #include <oboe/Oboe.h>
 #include <fstream>
+#include <mutex>
 #include "MelonInstance.h"
 
 class OboeCallback : public oboe::AudioStreamCallback {
@@ -11,9 +12,12 @@ private:
     void (*onErrorCallback)(void);
     std::ostream* _recordingStream;
     float audioSampleFrac;
+    // Guarded: the instance that is heard changes when switching between games (multi-instance)
+    std::mutex activeInstanceMutex;
+    std::weak_ptr<MelonDSAndroid::MelonInstance> activeInstance;
 
 public:
-    std::weak_ptr<MelonDSAndroid::MelonInstance> activeInstance;
+    void setActiveInstance(std::weak_ptr<MelonDSAndroid::MelonInstance> instance);
 
     OboeCallback(int volume, void (*onErrorCallback)(void)) : OboeCallback(volume, onErrorCallback, nullptr) { };
     OboeCallback(int volume, void (*onErrorCallback)(void), std::ostream* recordingStream);

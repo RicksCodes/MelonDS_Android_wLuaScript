@@ -78,6 +78,10 @@ public:
     std::vector<RetroAchievements::RARuntimeAchievement> getRuntimeAchievements();
     Lua::LuaEngine* getLuaEngine() { return luaEngine.get(); }
     void setFastForwardFrameSkip(bool enabled) { fastForwardFrameSkip = enabled; }
+    bool isFastForwardFrameSkipEnabled() const { return fastForwardFrameSkip; }
+    // Multi-instance: a game that is not on screen keeps running, but its frames are not drawn
+    void setHidden(bool isHidden) { hidden = isHidden; }
+    void releaseAllInput();
 
     // Lua::LuaHost
     u8 read8(u32 address) override;
@@ -137,6 +141,7 @@ private:
     // Fast-forward frameskip. The decision for a frame is taken one frame in advance, because the 3D scene of a
     // frame starts rendering during the previous one.
     std::atomic_bool fastForwardFrameSkip = false;
+    std::atomic_bool hidden = false;
     bool skipCurrentFrame = false;
     double averageFrameIntervalMs = 16.7;
     std::optional<std::chrono::steady_clock::time_point> lastFrameStartTime;

@@ -40,7 +40,7 @@ MelonInstance::MelonInstance(int instanceId, std::shared_ptr<EmulatorConfigurati
     net(net),
     screenshotRenderer(std::move(screenshotRenderer)),
     consoleType(consoleType),
-    rewindManager(configuration->rewindEnabled, configuration->rewindLengthSeconds, configuration->rewindCaptureSpacingSeconds, kRewindBufferSize, kRewindScreenshotSize)
+    rewindManager(configuration->rewindEnabled && instanceId == 0, configuration->rewindLengthSeconds, configuration->rewindCaptureSpacingSeconds, kRewindBufferSize, kRewindScreenshotSize)
 {
     // Software renderer is always used during initialisation. Actual renderer will be set of first frame run
     currentRenderer = Renderer::Software;
@@ -60,7 +60,11 @@ MelonInstance::MelonInstance(int instanceId, std::shared_ptr<EmulatorConfigurati
         nds = new NDS(std::move(*args), this);
     }
 
-    if (configuration->userInternalFirmwareAndBios)
+    if (instanceId > 0)
+    {
+        // The firmware file is shared with the main game, which is the only one that writes it
+    }
+    else if (configuration->userInternalFirmwareAndBios)
     {
         std::filesystem::path firmwarePath = MelonDSAndroid::internalFilesDir;
         firmwarePath /= "wfcsettings.bin";
@@ -464,12 +468,15 @@ u32 MelonInstance::runFrame()
 
 bool MelonInstance::shouldSkipFrame(int frameNumber)
 {
-    if (!fastForwardFrameSkip)
+    if (!fastForwardFrameSkip && !hidden)
         return false;
 
     // Rewind snapshots need a fully rendered frame for their thumbnail
     if (rewindManager.ShouldCaptureState(frameNumber))
         return false;
+
+    if (hidden)
+        return true;
 
     // Display about 60 frames per second: at 5x speed, show 1 frame out of 5
     int interval = (int) std::lround(16.7 / std::max(averageFrameIntervalMs, 0.5));
@@ -584,6 +591,15 @@ void MelonInstance::pressKey(u32 key)
     }
 }
 
+void MelonInstance::releaseAllInput()
+{
+    // Called when switching to the other game: buttons held on this one would otherwise stay pressed
+    inputMask = 0xFFF;
+    nds->SetKeyMask(effectiveKeyMask());
+    if (userTouching)
+        releaseScreen();
+}
+
 void MelonInstance::releaseKey(u32 key)
 {
     // Special handling for Lid input
@@ -652,7 +668,7 @@ void MelonInstance::updateConfiguration(std::shared_ptr<EmulatorConfiguration> n
         nds->SPU.SetDegrade10Bit(static_cast<AudioBitDepth>(newConfiguration->audioSettings.audioBitrate));
     }
 
-    rewindManager.UpdateRewindSettings(newConfiguration->rewindEnabled, newConfiguration->rewindLengthSeconds, newConfiguration->rewindCaptureSpacingSeconds);
+    rewindManager.UpdateRewindSettings(newConfiguration->rewindEnabled && instanceId == 0, newConfiguration->rewindLengthSeconds, newConfiguration->rewindCaptureSpacingSeconds);
 
     currentConfiguration = newConfiguration;
     isRenderConfigurationDirty = true;

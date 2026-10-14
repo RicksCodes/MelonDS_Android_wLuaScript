@@ -17,7 +17,9 @@
 */
 
 #include <cassert>
+#include <cerrno>
 #include <chrono>
+#include <ctime>
 #include <dlfcn.h>
 #include <filesystem>
 #include <stdio.h>
@@ -67,6 +69,11 @@ namespace Platform
 
     void SignalStop(StopReason reason, void* userdata)
     {
+        // A second game (multi-instance) that stops doesn't end the session: it is closed from the pause menu
+        auto emulatorInstance = (MelonDSAndroid::MelonInstance*) userdata;
+        if (emulatorInstance != nullptr && emulatorInstance->getInstanceId() != 0)
+            return;
+
         MelonDSAndroid::eventMessenger->onEmulatorStop(reason);
     }
 
@@ -378,45 +385,36 @@ namespace Platform
 
     bool Semaphore_TryWait(Semaphore* sema, int timeout_ms)
     {
+        // Used by local wireless (multi-instance). The original version returned without unlocking the mutex, which
+        // froze the emulator thread on the next call, and passed a relative timeout where an absolute time is expected
         AndroidSemaphore* semaphore = (AndroidSemaphore*) sema;
         pthread_mutex_lock(&semaphore->mutex);
-        bool result;
 
-        if (semaphore->val > 0)
+        if (semaphore->val == 0 && timeout_ms > 0)
         {
+            timespec deadline;
+            clock_gettime(CLOCK_REALTIME, &deadline);
+            deadline.tv_sec += timeout_ms / 1000;
+            deadline.tv_nsec += (long) (timeout_ms % 1000) * 1000000;
+            if (deadline.tv_nsec >= 1000000000)
+            {
+                deadline.tv_sec++;
+                deadline.tv_nsec -= 1000000000;
+            }
+
+            while (semaphore->val == 0)
+            {
+                if (pthread_cond_timedwait(&semaphore->cond, &semaphore->mutex, &deadline) == ETIMEDOUT)
+                    break;
+            }
+        }
+
+        bool acquired = semaphore->val > 0;
+        if (acquired)
             semaphore->val--;
-            pthread_mutex_unlock(&semaphore->mutex);
-            return true;
-        }
 
-        if (!timeout_ms)
-        {
-            // No resources available. Can't acquire
-            result = false;
-        }
-        else
-        {
-            timespec timeout {
-                .tv_sec = 0,
-                .tv_nsec = timeout_ms * 1000000
-            };
-
-            int waitResult = 0;
-            while (semaphore->val == 0 && waitResult == 0)
-                waitResult = pthread_cond_timedwait(&semaphore->cond, &semaphore->mutex, &timeout);
-
-            if (waitResult == 0)
-            {
-                semaphore->val--;
-                result = true;
-            }
-            else
-            {
-                result = false;
-            }
-        }
-
-        return result;
+        pthread_mutex_unlock(&semaphore->mutex);
+        return acquired;
     }
 
     void Semaphore_Post(Semaphore* sema, int count)
